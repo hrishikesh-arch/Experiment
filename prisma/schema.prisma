@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Hashed
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Experiment {
+  id           String      @id @default(uuid())
+  name         String
+  description  String?
+  status       String      @default("DRAFT") // DRAFT, ACTIVE, PAUSED, COMPLETED, ARCHIVED
+  groupCode    String      @unique
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  conditions   Condition[]
+  sessions     Session[]
+}
+
+model Condition {
+  id                     String      @id @default(uuid())
+  experimentId           String
+  name                   String
+  bystanderCount         Int         @default(10)
+  activityLevel          String      @default("MEDIUM") // LOW, MEDIUM, HIGH
+  participantTargeting   String      @default("MEDIUM") // LOW, MEDIUM, HIGH
+  scenarioType           String?
+  scenarioDelaySeconds   Int         @default(300) // Default 5 minutes
+  createdAt              DateTime    @default(now())
+  
+  experiment             Experiment  @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  sessions               Session[]
+}
+
+model Participant {
+  id           String    @id @default(uuid())
+  name         String
+  email        String
+  phone        String
+  profilePhoto String?
+  createdAt    DateTime  @default(now())
+  
+  sessions     Session[]
+}
+
+model BotProfile {
+  id                      String   @id @default(uuid())
+  name                    String
+  avatar                  String?
+  personality             String   // TALKATIVE, QUIET, HUMOROUS, HELPFUL, DISTRACTED, CURIOUS, NEUTRAL, SOCIAL
+  activityLevel           String   // LOW, MEDIUM, HIGH
+  responseProbability     Float    @default(0.5)
+  participantInteraction  String   // LOW, MEDIUM, HIGH
+  createdAt               DateTime @default(now())
+}
+
+model Session {
+  id                   String       @id @default(uuid())
+  participantId        String
+  experimentId         String
+  conditionId          String
+  status               String       @default("WAITING") // WAITING, NORMAL_CONVERSATION, SCENARIO_TRIGGERED, COMPLETED
+  startTime            DateTime     @default(now())
+  endTime              DateTime?
+  randomSeed           String?
+  
+  // Snapshot of config at start
+  bystanderCount       Int
+  activityLevel        String
+  scenarioDelaySeconds Int
+  
+  participant          Participant  @relation(fields: [participantId], references: [id])
+  experiment           Experiment   @relation(fields: [experimentId], references: [id])
+  condition            Condition    @relation(fields: [conditionId], references: [id])
+  messages             Message[]
+  events               EventLog[]
+}
+
+model Message {
+  id               String   @id @default(uuid())
+  sessionId        String
+  senderId         String   // Can be Participant ID, Bot ID, System
+  senderType       String   // PARTICIPANT, BOT, SYSTEM, CREATOR
+  messageText      String
+  timestamp        DateTime @default(now())
+  targetType       String?  // NONE, PARTICIPANT, BOT
+  targetId         String?  // The ID of who is targeted, if any
+  messageType      String   @default("NORMAL") // NORMAL, DIRECTED, SCENARIO, SYSTEM
+  replyToMessageId String?
+  
+  session          Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model EventLog {
+  id           String   @id @default(uuid())
+  sessionId    String
+  eventType    String   // SESSION_STARTED, MESSAGE_RECEIVED, MESSAGE_SENT, BOT_TARGETED_PARTICIPANT, SCENARIO_STARTED, SCENARIO_MESSAGE, PARTICIPANT_RESPONDED, SESSION_ENDED
+  timestamp    DateTime @default(now())
+  details      String?  // JSON string for additional context
+  
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
