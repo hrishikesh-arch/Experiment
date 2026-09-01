@@ -19,6 +19,8 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [participantName, setParticipantName] = useState("You");
+  const [participantCount, setParticipantCount] = useState<number>(0);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -38,6 +40,8 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
         if (res.ok) {
           const data = await res.json();
           setMessages(data.messages);
+          if (data.participantCount) setParticipantCount(data.participantCount);
+          if (data.typingUsers) setTypingUsers(data.typingUsers);
         }
       } catch (err) {
         console.error("Failed to load messages", err);
@@ -91,7 +95,9 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
         </div>
         <div>
           <h1 className="font-semibold text-lg leading-tight">Study Discussion Group</h1>
-          <p className="text-xs opacity-80">Active now</p>
+          <p className="text-xs opacity-80">
+            {participantCount > 0 ? `${participantCount} participants` : "Active now"}
+          </p>
         </div>
       </div>
 
@@ -120,6 +126,11 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
             </div>
           );
         })}
+        {typingUsers.length > 0 && (
+          <div className="flex justify-start items-center text-sm text-gray-500 italic pl-10">
+            {typingUsers.join(", ")} {typingUsers.length > 1 ? "are" : "is"} typing...
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 

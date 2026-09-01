@@ -14,21 +14,24 @@ export async function GET(request: Request) {
     // Drive the bots forward
     await processBotActions(sessionId);
 
-    const messages = await prisma.message.findMany({
+    const now = new Date();
+
+    const allSessionMessages = await prisma.message.findMany({
       where: { sessionId },
       orderBy: { timestamp: "asc" },
     });
 
-    // To include sender names, we might need to join or fetch Participant/Bot profiles
-    // For simplicity in this endpoint, we fetch the session to get participant info
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      include: { participant: true },
+      include: { participant: true, condition: true },
     });
 
     if (!session) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
+
+    const messages = allSessionMessages.filter(m => m.timestamp <= now);
+    const futureMessages = allSessionMessages.filter(m => m.timestamp > now);
 
     const formattedMessages = await Promise.all(
       messages.map(async (msg) => {
@@ -49,7 +52,24 @@ export async function GET(request: Request) {
       })
     );
 
-    return NextResponse.json({ messages: formattedMessages });
+    const typingUsers = await Promise.all(
+      futureMessages.map(async (msg) => {
+        if (msg.senderType === "BOT") {
+          const bot = await prisma.botProfile.findUnique({ where: { id: msg.senderId } });
+          return bot?.name || "Bot";
+        }
+        return "Someone";
+      })
+    );
+
+    // Filter unique typing users
+    const uniqueTyping = Array.from(new Set(typingUsers));
+
+    return NextResponse.json({ 
+      messages: formattedMessages,
+      participantCount: session.condition.bystanderCount + 1, // bots + 1 real user
+      typingUsers: uniqueTyping
+    });
   } catch (error) {
     console.error("Messages fetch error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
